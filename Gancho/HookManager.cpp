@@ -5,9 +5,9 @@
 HookManager::HookManager()
 {
 #if defined(_WIN64)
-    ZydisDecoderInit(&ZDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+    ZydisDecoderInit(&ZDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
 #else
-    ZydisDecoderInit(&ZDecoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_ADDRESS_WIDTH_32);
+    ZydisDecoderInit(&ZDecoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_STACK_WIDTH_32);
 #endif
 }
 
@@ -68,11 +68,12 @@ VOID HookManager::DisassambleAt(_In_ ULONG_PTR* Address, _In_ SIZE_T NumberOfIns
     {
         // Decode the instruction at the specified address
         ZydisDecodedInstruction instruction;
-        ZydisDecoderDecodeBuffer(&ZDecoder, reinterpret_cast<const void*>(Address), 16, &instruction);
+		ZydisDecodedOperand operands[10];
+        ZydisDecoderDecodeFull(&ZDecoder, reinterpret_cast<const void*>(Address), 16, &instruction, operands);
 
         // Format the instruction and print it to the console
 
-        ZydisFormatterFormatInstruction(&formatter, &instruction, Buffer, sizeof(Buffer), (ZyanU64)Address);
+        ZydisFormatterFormatInstruction(&formatter, &instruction, operands, operands->element_count, Buffer, sizeof(Buffer), (ZyanU64)Address, ZYAN_NULL);
         std::printf("0x%x - %s\n", Address, Buffer);
         Address = (ULONG_PTR*)((BYTE*)Address + instruction.length);
     }
@@ -115,6 +116,7 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst, _In_ BOOL IgnoreProt)
     // Dissasemble and analyze the instructions make sure that everything is aligned and working properly
     //
     ZydisDecodedInstruction inst;
+	ZydisDecodedOperand operands[10];
 
     //
     // Hook structure to store core information about this hook 
@@ -124,7 +126,7 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst, _In_ BOOL IgnoreProt)
     //
     // Disassemble to pick the instructions length 
     //
-    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X64_TRAMPOLINE_SIZE)
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst, operands)) && overlap < X64_TRAMPOLINE_SIZE)
     {
         overlap += inst.length;
         pSrc += inst.length;
@@ -197,11 +199,12 @@ HookManager::Hook32(
     Hook* HookStructure;
 
     ZydisDecodedInstruction inst;
+	ZydisDecodedOperand operands[10];
 
     //
     // Disassemble to pick the instructions length 
     //
-    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X86_TRAMPOLINE_SIZE)
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst, operands)) && overlap < X86_TRAMPOLINE_SIZE)
     {
         overlap += inst.length;
         pSrc += inst.length;
